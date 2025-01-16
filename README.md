@@ -73,16 +73,4 @@ The main difference between special_tokens and vllm is the format of the input d
 
 ### Evaluation (Coming Soon)
 
-The evaluation component will provide metrics for assessing the quality of RAG outputs.
-
-## Installation
-
-TODO
-
-## Contributing
-
-Contributions are welcome! Please see our contributing guidelines for more information.
-
-## License
-
 TODO
