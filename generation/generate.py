@@ -11,7 +11,6 @@ class RAGGenerator:
         generator_type: str,  # Must be either 'vllm' or 'special_tokens'
         input_path: str,
         model_path: str,
-        output_dir: Optional[str] = None,
         num_rows: Optional[int] = None,
     ):
         """
@@ -21,7 +20,6 @@ class RAGGenerator:
             generator_type: Type of generator ('vllm' or 'special_tokens')
             input_path: Path to input parquet file
             model_path: Path to model weights
-            output_dir: Directory for saving outputs
             num_rows: Number of rows to process (None for all)
         """
         if generator_type not in ['vllm', 'special_tokens']:
@@ -30,7 +28,6 @@ class RAGGenerator:
         self.generator_type = generator_type
         self.input_path = input_path
         self.model_path = model_path
-        self.output_dir = output_dir
         self.num_rows = num_rows if num_rows is not None else -1
         self.generator = self._initialize_generator()
 
@@ -47,33 +44,31 @@ class RAGGenerator:
             num_rows=self.num_rows
         )
 
-    def generate(self, save_output: bool = False) -> pd.DataFrame:
+    def generate(self) -> pd.DataFrame:
         """
         Generate RAG outputs.
-
-        Args:
-            save_output: Whether to save results to disk
 
         Returns:
             DataFrame containing generated responses
         """
-        output_df = self.generator.generate()
-        
-        if save_output and self.output_dir:
-            self._save_outputs(output_df)
-        
-        return output_df
+        return self.generator.generate()
 
-    def _save_outputs(self, df: pd.DataFrame):
-        """Save outputs in both parquet and readable formats."""
-        os.makedirs(self.output_dir, exist_ok=True)
+    def save_outputs(self, df: pd.DataFrame, output_dir: str):
+        """
+        Save the generation outputs to disk.
+
+        Args:
+            df: DataFrame containing the generations
+            output_dir: Directory where outputs should be saved
+        """
+        os.makedirs(output_dir, exist_ok=True)
         
         # Save parquet
-        output_parquet_path = os.path.join(self.output_dir, 'generations.parquet')
+        output_parquet_path = os.path.join(output_dir, 'generations.parquet')
         df.to_parquet(output_parquet_path)
         
         # Save readable samples
-        output_txt_path = os.path.join(self.output_dir, 'sample_generations.txt')
+        output_txt_path = os.path.join(output_dir, 'sample_generations.txt')
         self._save_readable_format(df, output_txt_path)
 
     def _save_readable_format(self, df: pd.DataFrame, output_path: str):
