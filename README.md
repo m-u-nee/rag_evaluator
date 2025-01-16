@@ -128,11 +128,6 @@ The evaluation produces two types of metrics:
    - `reasoning_quality_index`: Quality of reasoning and argumentation
    - `combined_index`: Overall LLM evaluation score
 
-The final `overall_rag_score` combines all metrics with the following weights:
-- Combined Index: 30%
-- RAG Index: 30%
-- Non-hallucinated Citation: 20%
-- Query Adherence Index: 20%
 
 ### Expected Input Format
 
