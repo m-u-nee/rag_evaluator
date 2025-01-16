@@ -40,6 +40,7 @@ class TextAlignment:
         self.gap = gap
         self.edit_mark = edit_mark
 
+    # [TextAlignment methods remain unchanged]
     def tokenize(self, text: str) -> List[str]:
         """Split text into tokens"""
         return re.findall(r'\S+', text)
@@ -49,16 +50,7 @@ class TextAlignment:
         return self.edit_mark * len(word)
 
     def align_local(self, text_a: str, text_b: str) -> Dict:
-        """
-        Perform local sequence alignment using Smith-Waterman algorithm.
-        
-        Args:
-            text_a: First text sequence
-            text_b: Second text sequence
-            
-        Returns:
-            Dictionary containing alignment results and score
-        """
+        """Perform local sequence alignment using Smith-Waterman algorithm."""
         a_orig = self.tokenize(text_a)
         b_orig = self.tokenize(text_b)
         a = [word.lower() for word in a_orig]
@@ -127,18 +119,7 @@ class TextAlignment:
                          citation_col: str = 'citation', 
                          source_col: str = 'original_source',
                          batch_size: int = 1000) -> pd.DataFrame:
-        """
-        Process DataFrame to calculate alignment scores.
-        
-        Args:
-            df: Input DataFrame
-            citation_col: Column name containing citations
-            source_col: Column name containing source text
-            batch_size: Batch size for processing
-            
-        Returns:
-            DataFrame with added alignment scores
-        """
+        """Process DataFrame to calculate alignment scores."""
         def process_row(row):
             result = self.align_local(str(row[citation_col]), str(row[source_col]))
             return result['score']
@@ -159,24 +140,16 @@ class MetricsCalculator:
     """Calculator for RAG metrics"""
     def __init__(self, eval_df: pd.DataFrame,
                  response_col: str = 'generated_response',
-                 text_col: str = 'text',
-                 model_col: str = 'model',
-                 model_filter: str = 'Pleias'):
+                 text_col: str = 'text'):
         self.eval_df = eval_df
         self.response_col = response_col
         self.text_col = text_col
-        self.model_col = model_col
-        self.model_filter = model_filter
         self.aligner = TextAlignment(match=2, mismatch=-1, gap=-1)
         
     def calculate_metrics(self) -> Dict[str, float]:
         """Calculate all RAG metrics"""
-        eval_df_filtered = self.eval_df[
-            self.eval_df[self.model_col].str.contains(self.model_filter, na=False)
-        ].copy()
-        
-        sources_processed = self._process_sources(eval_df_filtered.copy())
-        references_df = self._process_references(eval_df_filtered, sources_processed)
+        sources_processed = self._process_sources(self.eval_df.copy())
+        references_df = self._process_references(self.eval_df, sources_processed)
         
         metrics = {}
         
@@ -210,15 +183,20 @@ class MetricsCalculator:
         sources_df = sources_df.explode('source_text')
         sources_df['source_id'] = sources_df['source_text'].apply(extract_source_id)
         sources_df['source_text'] = sources_df['source_text'].apply(clean_source_text)
-        return sources_df[['generation_id', self.model_col, 'source_text', 'source_id']]
+        
+        # Add simple numeric generation_id
+        sources_df['generation_id'] = range(1, len(sources_df) + 1)
+        sources_df['generation_id'] = sources_df['generation_id'].astype(str)
+        
+        return sources_df[['generation_id', 'source_text', 'source_id']]
     
     def _process_references(self, eval_df: pd.DataFrame, sources: pd.DataFrame) -> pd.DataFrame:
         """Process references from responses"""
         references = []
-        for _, row in eval_df.iterrows():
+        for idx, row in eval_df.iterrows():
             try:
                 text = row[self.response_col]
-                generation_id = row["generation_id"]
+                generation_id = str(idx + 1)  # Simple numeric generation_id
                 answer = extract_content(text, r'<\|answer_start\|>', r'<\|answer_end\|>')
                 refs = extract_references(answer, generation_id, sources)
                 references.extend(refs)
@@ -227,42 +205,24 @@ class MetricsCalculator:
         return pd.DataFrame(references)
 
 class RAGHallucinationEvaluator:
-    """
-    A single-line evaluator for RAG systems that calculates various metrics.
-    
-    Usage:
-        evaluator = RAGEvaluator()
-        metrics = evaluator.evaluate(responses_df)
-    """
+    """A single-line evaluator for RAG systems that calculates various metrics."""
     
     def __init__(self, match: int = 2, mismatch: int = -1, gap: int = -1):
-        """
-        Initialize the RAG evaluator.
-        
-        Args:
-            match: Score for matching words (default: 2)
-            mismatch: Penalty for mismatched words (default: -1)
-            gap: Penalty for gaps (default: -1)
-        """
         self.match = match
         self.mismatch = mismatch
         self.gap = gap
         
     def evaluate(self, 
                 data: Union[pd.DataFrame, str, List[Dict]], 
-                model_filter: str = 'Pleias',
                 response_col: str = 'generated_response',
-                text_col: str = 'text',
-                model_col: str = 'model') -> RAGMetrics:
+                text_col: str = 'text') -> RAGMetrics:
         """
         Evaluate RAG system performance from responses.
         
         Args:
             data: DataFrame containing responses or path to parquet file
-            model_filter: Filter for specific model responses (default: 'Pleias')
-            response_col: Column name for generated responses (default: 'generated_response')
-            text_col: Column name for input text (default: 'text')
-            model_col: Column name for model identifier (default: 'model')
+            response_col: Column name for generated responses
+            text_col: Column name for input text
             
         Returns:
             RAGMetrics object containing calculated metrics
@@ -273,25 +233,17 @@ class RAGHallucinationEvaluator:
         elif isinstance(data, list):
             data = pd.DataFrame(data)
         
-        # Prepare data
-        eval_df = data.copy()
-        eval_df = eval_df.drop_duplicates(subset=[text_col, model_col], keep='first')
-        eval_df = eval_df.sort_values(model_col)
-        eval_df['generation_id'] = eval_df.groupby(model_col).cumcount() + 1
-        eval_df['generation_id'] = eval_df[model_col] + '_' + eval_df['generation_id'].astype(str)
-        
         # Initialize calculator and compute metrics
         calculator = MetricsCalculator(
-            eval_df=eval_df,
+            eval_df=data,
             response_col=response_col,
-            text_col=text_col,
-            model_col=model_col,
-            model_filter=model_filter
+            text_col=text_col
         )
         
         metrics_dict = calculator.calculate_metrics()
         return RAGMetrics(**metrics_dict)
 
+# Helper functions remain unchanged
 def extract_content(text: str, start_tag: str, end_tag: str) -> Optional[str]:
     """Extract content between tags"""
     pattern = f"{start_tag}(.*?)(?:{end_tag}|$)"
@@ -343,9 +295,3 @@ def clean_source_text(text: str) -> str:
     text = re.sub(r'<\|source_id_start\|>.+?<\|source_id_end\|>', '', text)
     text = re.sub(r'<\|.+?\|>', '', text)
     return text
-
-if __name__ == "__main__":
-    # Test the RAG Evaluator
-    evaluator = RAGHallucinationEvaluator()
-    metrics = evaluator.evaluate("/Users/mattia/Desktop/rag_evaluator_test/test_small_input_modified.parquet")
-    print(metrics)

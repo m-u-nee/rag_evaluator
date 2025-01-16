@@ -27,20 +27,16 @@ class RAGEvaluationPipeline:
     def evaluate(self, 
                 input_file: str,
                 output_file: str = None,
-                model_filter: str = 'Pleias',
                 response_col: str = 'generated_response',
-                text_col: str = 'text',
-                model_col: str = 'model') -> Dict[str, Any]:
+                text_col: str = 'text') -> Dict[str, Any]:
         """
         Run comprehensive evaluation using both evaluators.
         
         Args:
             input_file: Path to input parquet file
             output_file: Optional path to save results
-            model_filter: Filter for specific model responses
             response_col: Column name for generated responses
             text_col: Column name for input text
-            model_col: Column name for model identifier
             
         Returns:
             Dictionary containing all evaluation metrics
@@ -54,10 +50,8 @@ class RAGEvaluationPipeline:
         # Run hallucination evaluation
         hallucination_metrics = self.hallucination_evaluator.evaluate(
             data=df,
-            model_filter=model_filter,
             response_col=response_col,
-            text_col=text_col,
-            model_col=model_col
+            text_col=text_col
         )
         
         # Combine metrics
@@ -96,11 +90,9 @@ def main():
     parser.add_argument('--input', required=True, help='Input parquet file path')
     parser.add_argument('--output', help='Output file path for results')
     parser.add_argument('--model-path', required=True, help='Path to LLM evaluation model')
-    parser.add_argument('--model-filter', default='Pleias', help='Model filter string')
     parser.add_argument('--max-model-len', type=int, default=8192, help='Maximum model length')
     parser.add_argument('--response-col', default='generated_response', help='Response column name')
     parser.add_argument('--text-col', default='text', help='Text column name')
-    parser.add_argument('--model-col', default='model', help='Model column name')
     
     args = parser.parse_args()
     
@@ -113,10 +105,8 @@ def main():
     results = pipeline.evaluate(
         input_file=args.input,
         output_file=args.output,
-        model_filter=args.model_filter,
         response_col=args.response_col,
-        text_col=args.text_col,
-        model_col=args.model_col
+        text_col=args.text_col
     )
     
     # Print results summary

@@ -3,7 +3,7 @@ from vllm import LLM, SamplingParams
 import re
 import pathlib
 import os
-from typing import List, Dict, Union, Optional
+from typing import List, Dict, Optional
 from dataclasses import dataclass
 import numpy as np
 
@@ -86,16 +86,7 @@ class RAGLLMEvaluator:
         return components
 
     def evaluate_single(self, query: str, answer: str) -> EvaluationResults:
-        """
-        Evaluate a single query-answer pair.
-        
-        Args:
-            query (str): The query text
-            answer (str): The answer text
-            
-        Returns:
-            EvaluationResults: Evaluation metrics
-        """
+        """Evaluate a single query-answer pair."""
         clean_answer = self._clean_citations(answer)
         input_text = f'### Query ###\n{query}\n\n### Answer ###\n{clean_answer}\n\n### Query analysis ###\n'
 
@@ -113,16 +104,7 @@ class RAGLLMEvaluator:
         )
 
     def evaluate_batch(self, queries: List[str], answers: List[str]) -> List[EvaluationResults]:
-        """
-        Evaluate multiple query-answer pairs.
-        
-        Args:
-            queries (List[str]): List of query texts
-            answers (List[str]): List of answer texts
-            
-        Returns:
-            List[EvaluationResults]: List of evaluation metrics for each pair
-        """
+        """Evaluate multiple query-answer pairs."""
         if len(queries) != len(answers):
             raise ValueError("Number of queries and answers must match")
 
@@ -150,34 +132,17 @@ class RAGLLMEvaluator:
         return results
 
     def evaluate_from_file(self, input_file: str, output_file: Optional[str] = None) -> pd.DataFrame:
-        """
-        Evaluate query-answer pairs from a parquet file.
-        
-        Args:
-            input_file (str): Path to input parquet file
-            output_file (str, optional): Path to save results
-            
-        Returns:
-            pd.DataFrame: Evaluation results
-        """
-        # Initialize lists to store queries and answers
+        """Evaluate query-answer pairs from a parquet file."""
         queries = []
         answers = []
 
         result = pd.read_parquet(input_file)
-        # First ensure both columns exist
         if "text" not in result.columns or "generated_response" not in result.columns:
             raise ValueError("Missing required columns 'text' or 'generated_response'")
 
-        # Convert to string type and handle NaN values
-        result["text"] = result["text"].fillna("")
-        result["generated_response"] = result["generated_response"].fillna("")
-
-        # Ensure string type
-        result["text"] = result["text"].astype(str)
-        result["generated_response"] = result["generated_response"].astype(str)
-
-        # Now concatenate
+        # Handle data preparation
+        result["text"] = result["text"].fillna("").astype(str)
+        result["generated_response"] = result["generated_response"].fillna("").astype(str)
         result["text"] = result["text"] + result["generated_response"]
 
         for text in result["text"].tolist():
@@ -191,7 +156,7 @@ class RAGLLMEvaluator:
         evaluation_results = self.evaluate_batch(queries, answers)
 
         df = pd.DataFrame({
-            'chunk_id': range(len(queries)),  # Use simple index instead of chunk_id
+            'chunk_id': range(len(queries)),
             'query': queries,
             'answer': answers,
             'query_analysis': [r.query_analysis for r in evaluation_results],
@@ -203,18 +168,16 @@ class RAGLLMEvaluator:
         })
 
         if output_file:
-            # Create directory if it doesn't exist
+            # Handle file saving
             directory = os.path.dirname(output_file)
             pathlib.Path(directory).mkdir(parents=True, exist_ok=True)
-
-            # Save raw evaluation results
+            
             df.to_parquet(output_file)
-
-            # Save numeric metrics with a different filename
+            
             metrics_file = output_file.replace('.parquet', '_metrics.parquet')
             metrics_df = process_evaluation_metrics(df)
             metrics_df.to_parquet(metrics_file)
-
+            
             print(f"Raw evaluation results saved to: {output_file}")
             print(f"Numeric metrics saved to: {metrics_file}")
 
@@ -222,22 +185,7 @@ class RAGLLMEvaluator:
 
 
 def process_evaluation_metrics(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Process evaluation metrics and convert them to numerical scores for a single model.
-    
-    Args:
-        df: DataFrame containing the evaluation results
-    Returns:
-        DataFrame with processed metrics and indices
-    """
-    # Define scoring mappings
-    language_scoring = {
-        'High': 2,
-        'Correct': 1,
-        'Passable': 0,
-        'Low': -2
-    }
-
+    """Process evaluation metrics and convert them to numerical scores."""
     # Process language quality index
     language_results = (
         df.groupby(['language_quality'])
@@ -339,40 +287,3 @@ def process_evaluation_metrics(df: pd.DataFrame) -> pd.DataFrame:
     indices['combined_index'] = indices.mean(axis=1)
 
     return indices
-
-
-def calculate_rag_index(combined_index: pd.DataFrame,
-                       benchmark_citation: pd.DataFrame,
-                       grounding_index: pd.DataFrame) -> pd.DataFrame:
-    """
-    Calculate the final RAG index incorporating all metrics.
-    
-    Args:
-        combined_index: DataFrame with combined evaluation metrics
-        benchmark_citation: DataFrame with citation benchmark data
-        grounding_index: DataFrame with grounding index data
-        
-    Returns:
-        DataFrame: Final RAG index results
-    """
-    rag_index = (
-        combined_index
-        .merge(benchmark_citation, on='model', how='left')
-        .merge(grounding_index, on='model', how='left')
-    )
-
-    # Calculate RAG index with conditional logic for grounding index
-    cols_without_grounding = [
-        'language_quality_index', 'query_adherence_index', 'reasoning_quality_index',
-        'correct_id', 'valid_quote_ratio', 'unduplicated_quote_ratio', 'non_hallucinated_citation'
-    ]
-
-    cols_with_grounding = cols_without_grounding + ['grounding_index']
-
-    rag_index['rag_index'] = np.where(
-        rag_index['grounding_index'].notna(),
-        rag_index[cols_with_grounding].mean(axis=1),
-        rag_index[cols_without_grounding].mean(axis=1)
-    )
-
-    return rag_index.sort_values('rag_index', ascending=False)
