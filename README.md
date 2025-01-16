@@ -71,6 +71,76 @@ Generated outputs will include:
 
 The main difference between special_tokens and vllm is the format of the input data. The special tokens format is TODO
 
-### Evaluation (Coming Soon)
+### Evaluation
 
-TODO
+The library provides comprehensive evaluation capabilities through two main components: hallucination detection and LLM-based evaluation.
+
+### Requirements
+
+- A parquet file containing the following columns:
+  - `text`: The source context (including tagged sources)
+  - `generated_response`: The model's response
+
+### Basic Usage
+
+```python
+from rag_evaluation import RAGEvaluationPipeline
+
+# Initialize evaluator
+evaluator = RAGEvaluationPipeline(
+    model_path="path/to/evaluation/model",
+    max_model_len=8192  # optional
+)
+
+# Run evaluation
+results = evaluator.evaluate(
+    input_file="path/to/generations.parquet",
+    output_file="path/to/save/results.parquet"  # optional
+)
+
+# Access results
+print("\nEvaluation Results Summary:")
+print("\nLLM-based Metrics:")
+for key, value in results['llm_metrics'].items():
+    print(f"{key}: {value:.3f}")
+
+print("\nHallucination Metrics:")
+for key, value in results['hallucination_metrics'].items():
+    print(f"{key}: {value:.3f}")
+
+print("\nOverall RAG Score:", f"{results['overall_rag_score']:.3f}")
+```
+
+### Output Format
+
+The evaluation produces two types of metrics:
+
+1. Hallucination Metrics:
+   - `non_hallucinated_citation`: Accuracy of quoted content
+   - `valid_quote`: Proportion of substantive quotes (≥3 words)
+   - `valid_identifier`: Accuracy of source references
+   - `unduplicated_quote`: Uniqueness of citations
+   - `rag_index`: Combined hallucination score
+
+2. LLM-based Metrics:
+   - `query_adherence_index`: Relevance to original query
+   - `language_quality_index`: Quality of language and expression
+   - `reasoning_quality_index`: Quality of reasoning and argumentation
+   - `combined_index`: Overall LLM evaluation score
+
+The final `overall_rag_score` combines all metrics with the following weights:
+- Combined Index: 30%
+- RAG Index: 30%
+- Non-hallucinated Citation: 20%
+- Query Adherence Index: 20%
+
+### Expected Input Format
+
+Your input text should contain the following tags:
+- Source context: `<|source_start|>` and `<|source_end|>`
+- Source IDs: `<|source_id_start|>` and `<|source_id_end|>`
+- Queries: `<|query_start|>` and `<|query_end|>`
+- Answers: `<|answer_start|>` and `<|answer_end|>`
+- Citations: `<ref name="source_id">quoted text</ref>`
+
+The evaluation will automatically extract and analyze these components to generate the evaluation metrics.
