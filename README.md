@@ -19,7 +19,7 @@ The library calculates a RAG Index based on multiple evaluation metrics:
 | Valid Identifier | Checks source reference accuracy | Source ID validation |
 | Unduplicated Quote | Identifies redundant citations | Duplicate detection |
 
-### LLM-as-Judge Metrics (using GPT-4)
+### LLM-as-Judge Metrics (using finetuned llama model, to be made available on Hugging Face)
 
 | Metric | Description |
 |--------|-------------|
@@ -36,4 +36,8 @@ The final RAG Index is calculated as the mean of all available evaluation metric
 ## Format Requirements
 
 TODO
+
+## Usage
+
+The main components of the library are the ones used for generation of the RAG content, and the ones used for evaluation of the generated content. 
 
