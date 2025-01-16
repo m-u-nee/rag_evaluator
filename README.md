@@ -32,12 +32,57 @@ The library calculates a RAG Index based on multiple evaluation metrics:
 
 The final RAG Index is calculated as the mean of all available evaluation metrics, providing a comprehensive score for RAG system performance.
 
-
 ## Format Requirements
 
 TODO
 
 ## Usage
 
-The main components of the library are the ones used for generation of the RAG content, and the ones used for evaluation of the generated content. 
+The library consists of two main components: generation and evaluation of RAG content.
 
+### Generation
+
+The generation component allows you to create RAG outputs using different types of generators. Currently supported generators are:
+- VLLM Generator
+- Special Tokens Generator
+
+Basic usage:
+```python
+from rag_evaluation import RAGGenerator
+
+# Initialize generator
+generator = RAGGenerator(
+    generator_type="special_tokens",  # or "vllm"
+    input_path="path/to/input.parquet",
+    model_path="path/to/model",
+    num_rows=500  # optional, process all rows if not specified
+)
+
+# Generate responses
+results = generator.generate()
+
+# Optionally save outputs
+generator.save_outputs(results, output_dir="./outputs")
+```
+
+Generated outputs will include:
+- A parquet file containing all generations
+- A readable text file with samples of the generations
+
+The main difference between special_tokens and vllm is the format of the input data. The special tokens format is TODO
+
+### Evaluation (Coming Soon)
+
+The evaluation component will provide metrics for assessing the quality of RAG outputs.
+
+## Installation
+
+TODO
+
+## Contributing
+
+Contributions are welcome! Please see our contributing guidelines for more information.
+
+## License
+
+TODO
