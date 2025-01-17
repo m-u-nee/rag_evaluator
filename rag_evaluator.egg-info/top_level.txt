@@ -1,2 +1,0 @@
-rag_evaluator
-tests
