@@ -2,7 +2,7 @@ import argparse
 from dataclasses import asdict
 import pandas as pd
 import os
-from typing import Dict, Any
+from typing import Dict, Any, Union
 
 from running_eval_answer import RAGLLMEvaluator
 from hallucination import RAGHallucinationEvaluator
@@ -25,7 +25,7 @@ class RAGEvaluationPipeline:
         self.hallucination_evaluator = RAGHallucinationEvaluator()
         
     def evaluate(self, 
-                input_file: str,
+                data: Union[str, pd.DataFrame],
                 output_file: str = None,
                 response_col: str = 'generated_response',
                 text_col: str = 'text') -> Dict[str, Any]:
@@ -33,7 +33,7 @@ class RAGEvaluationPipeline:
         Run comprehensive evaluation using both evaluators.
         
         Args:
-            input_file: Path to input parquet file
+            data: Either a DataFrame or path to input parquet file
             output_file: Optional path to save results
             response_col: Column name for generated responses
             text_col: Column name for input text
@@ -41,11 +41,15 @@ class RAGEvaluationPipeline:
         Returns:
             Dictionary containing all evaluation metrics
         """
-        # Load data
-        df = pd.read_parquet(input_file)
-        
-        # Run LLM-based evaluation
-        llm_metrics = self.llm_evaluator.evaluate_from_file(input_file)
+        # Load data if necessary
+        if isinstance(data, str):
+            df = pd.read_parquet(data)
+            # Run LLM-based evaluation with file
+            llm_metrics = self.llm_evaluator.evaluate_from_file(data)
+        else:
+            df = data
+            # Run LLM-based evaluation with DataFrame
+            llm_metrics = self.llm_evaluator.evaluate_from_dataframe(df)
         
         # Run hallucination evaluation
         hallucination_metrics = self.hallucination_evaluator.evaluate(
@@ -104,7 +108,7 @@ def main():
     )
     
     results = pipeline.evaluate(
-        input_file=args.input,
+        data=args.input,
         output_file=args.output,
         response_col=args.response_col,
         text_col=args.text_col

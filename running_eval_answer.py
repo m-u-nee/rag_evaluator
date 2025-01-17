@@ -131,21 +131,20 @@ class RAGLLMEvaluator:
 
         return results
 
-    def evaluate_from_file(self, input_file: str, output_file: Optional[str] = None) -> pd.DataFrame:
-        """Evaluate query-answer pairs from a parquet file."""
+    def _process_data(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Process DataFrame and evaluate query-answer pairs."""
         queries = []
         answers = []
 
-        result = pd.read_parquet(input_file)
-        if "text" not in result.columns or "generated_response" not in result.columns:
+        if "text" not in df.columns or "generated_response" not in df.columns:
             raise ValueError("Missing required columns 'text' or 'generated_response'")
 
         # Handle data preparation
-        result["text"] = result["text"].fillna("").astype(str)
-        result["generated_response"] = result["generated_response"].fillna("").astype(str)
-        result["text"] = result["text"] + result["generated_response"]
+        df["text"] = df["text"].fillna("").astype(str)
+        df["generated_response"] = df["generated_response"].fillna("").astype(str)
+        concatenated_text = df["text"] + df["generated_response"]
 
-        for text in result["text"].tolist():
+        for text in concatenated_text.tolist():
             query = self._extract_content(text, "<|query_start|>", "<|query_end|>")
             answer = self._extract_content(text, "<|answer_start|>", "<|answer_end|>")
 
@@ -155,7 +154,7 @@ class RAGLLMEvaluator:
 
         evaluation_results = self.evaluate_batch(queries, answers)
 
-        df = pd.DataFrame({
+        results_df = pd.DataFrame({
             'chunk_id': range(len(queries)),
             'query': queries,
             'answer': answers,
@@ -167,22 +166,33 @@ class RAGLLMEvaluator:
             'raw_analysis': [r.raw_analysis for r in evaluation_results]
         })
 
+        return results_df
+
+    def evaluate_from_file(self, input_file: str, output_file: Optional[str] = None) -> pd.DataFrame:
+        """Evaluate query-answer pairs from a parquet file."""
+        df = pd.read_parquet(input_file)
+        results_df = self._process_data(df)
+        metrics_df = process_evaluation_metrics(results_df)
+
         if output_file:
             # Handle file saving
             directory = os.path.dirname(output_file)
             pathlib.Path(directory).mkdir(parents=True, exist_ok=True)
             
-            df.to_parquet(output_file)
+            results_df.to_parquet(output_file)
             
             metrics_file = output_file.replace('.parquet', '_metrics.parquet')
-            metrics_df = process_evaluation_metrics(df)
             metrics_df.to_parquet(metrics_file)
             
             print(f"Raw evaluation results saved to: {output_file}")
             print(f"Numeric metrics saved to: {metrics_file}")
 
-        return process_evaluation_metrics(df)
+        return metrics_df
 
+    def evaluate_from_dataframe(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Evaluate query-answer pairs from a DataFrame."""
+        results_df = self._process_data(df)
+        return process_evaluation_metrics(results_df)
 
 def process_evaluation_metrics(df: pd.DataFrame) -> pd.DataFrame:
     """Process evaluation metrics and convert them to numerical scores."""
