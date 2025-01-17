@@ -4,8 +4,8 @@ import pandas as pd
 import os
 from typing import Dict, Any, Union
 
-from running_eval_answer import RAGLLMEvaluator
-from hallucination import RAGHallucinationEvaluator
+from .running_eval_answer import RAGLLMEvaluator
+from .hallucination import RAGHallucinationEvaluator
 
 class RAGEvaluationPipeline:
     """
