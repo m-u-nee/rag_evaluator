@@ -60,23 +60,24 @@ class RAGEvaluationPipeline:
             "hallucination_metrics": asdict(hallucination_metrics)
         }
         
-        # Calculate overall RAG score
-        # Weighted average of key metrics from both evaluators
-        weights = {
-            'combined_index': 0.3,  # From LLM evaluator
-            'rag_index': 0.3,      # From hallucination evaluator
-            'non_hallucinated_citation': 0.2,
-            'query_adherence_index': 0.2
-        }
+        # Calculate overall RAG score as average of all metrics
+        all_metrics = []
+        # Add LLM metrics
+        all_metrics.extend([
+            combined_metrics['llm_metrics']['language_quality_index'],
+            combined_metrics['llm_metrics']['reasoning_quality_index'],
+            combined_metrics['llm_metrics']['query_adherence_index']
+        ])
+        # Add hallucination metrics
+        all_metrics.extend([
+            combined_metrics['hallucination_metrics']['non_hallucinated_citation'],
+            combined_metrics['hallucination_metrics']['valid_quote'],
+            combined_metrics['hallucination_metrics']['valid_identifier'],
+            combined_metrics['hallucination_metrics']['unduplicated_quote']
+        ])
         
-        overall_score = (
-            weights['combined_index'] * combined_metrics['llm_metrics']['combined_index'] +
-            weights['rag_index'] * combined_metrics['hallucination_metrics']['rag_index'] +
-            weights['non_hallucinated_citation'] * combined_metrics['hallucination_metrics']['non_hallucinated_citation'] +
-            weights['query_adherence_index'] * combined_metrics['llm_metrics']['query_adherence_index']
-        )
-        
-        combined_metrics['overall_rag_score'] = overall_score
+        # Calculate overall score as simple average
+        combined_metrics['overall_rag_score'] = sum(all_metrics) / len(all_metrics)
         
         # Save results if output file specified
         if output_file:

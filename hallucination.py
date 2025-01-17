@@ -40,7 +40,6 @@ class TextAlignment:
         self.gap = gap
         self.edit_mark = edit_mark
 
-    # [TextAlignment methods remain unchanged]
     def tokenize(self, text: str) -> List[str]:
         """Split text into tokens"""
         return re.findall(r'\S+', text)
@@ -153,6 +152,31 @@ class MetricsCalculator:
         
         metrics = {}
         
+        # First get total reference count and add citation_id
+        references_df['citation_id'] = range(1, len(references_df) + 1)
+        total_citations = len(references_df)
+        
+        # Find correct citations (references that match source IDs)
+        correct_citations = (references_df[['generation_id', 'reference_id', 'citation_id']]
+            .merge(
+                sources_processed[['generation_id', 'source_id']], 
+                left_on=['generation_id', 'reference_id'],
+                right_on=['generation_id', 'source_id']
+            )
+        )
+        
+        # Count hallucinated IDs (those that don't match sources)
+        hallucinated_ids = total_citations - len(correct_citations)
+        
+        # Calculate valid_identifier as 1 - (hallucinated/total)
+        metrics['valid_identifier'] = 1 - (hallucinated_ids / total_citations) if total_citations > 0 else 0
+        
+        print("\nValid Identifier Calculation:")
+        print(f"Total citations: {total_citations}")
+        print(f"Correct citations: {len(correct_citations)}")
+        print(f"Hallucinated IDs: {hallucinated_ids}")
+        print(f"Valid identifier score: {metrics['valid_identifier']:.3f}")
+        
         # Calculate aligned metrics
         aligned_df = self.aligner.process_dataframe(references_df)
         
@@ -161,12 +185,6 @@ class MetricsCalculator:
         
         # Valid quote (3+ words)
         metrics['valid_quote'] = np.mean(aligned_df['citation_size'] >= 3)
-        
-        # Valid identifier
-        metrics['valid_identifier'] = np.mean(
-            aligned_df['reference_id'].notna() & 
-            aligned_df['reference_id'].str.len() > 0
-        )
         
         # Unduplicated quote
         citation_counts = Counter(aligned_df['citation'])
@@ -193,15 +211,29 @@ class MetricsCalculator:
     def _process_references(self, eval_df: pd.DataFrame, sources: pd.DataFrame) -> pd.DataFrame:
         """Process references from responses"""
         references = []
+        total_rows = len(eval_df)
+        rows_with_refs = 0
+        print(f"\nProcessing references from {total_rows} rows")
+        
         for idx, row in eval_df.iterrows():
             try:
                 text = row[self.response_col]
                 generation_id = str(idx + 1)  # Simple numeric generation_id
                 answer = extract_content(text, r'<\|answer_start\|>', r'<\|answer_end\|>')
-                refs = extract_references(answer, generation_id, sources)
-                references.extend(refs)
+                if answer:
+                    refs = extract_references(answer, generation_id, sources)
+                    if refs:
+                        rows_with_refs += 1
+                        references.extend(refs)
             except Exception as e:
+                print(f"Error processing row {idx}: {str(e)}")
                 continue
+        
+        print(f"\nReference extraction summary:")
+        print(f"Total rows processed: {total_rows}")
+        print(f"Rows with references: {rows_with_refs}")
+        print(f"Total references found: {len(references)}")
+        
         return pd.DataFrame(references)
 
 class RAGHallucinationEvaluator:
@@ -233,6 +265,10 @@ class RAGHallucinationEvaluator:
         elif isinstance(data, list):
             data = pd.DataFrame(data)
         
+        print("\nProcessing Input Data:")
+        print(f"Total rows: {len(data)}")
+        print(f"Columns: {data.columns.tolist()}")
+        
         # Initialize calculator and compute metrics
         calculator = MetricsCalculator(
             eval_df=data,
@@ -243,7 +279,6 @@ class RAGHallucinationEvaluator:
         metrics_dict = calculator.calculate_metrics()
         return RAGMetrics(**metrics_dict)
 
-# Helper functions remain unchanged
 def extract_content(text: str, start_tag: str, end_tag: str) -> Optional[str]:
     """Extract content between tags"""
     pattern = f"{start_tag}(.*?)(?:{end_tag}|$)"
