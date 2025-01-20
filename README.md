@@ -25,8 +25,8 @@ The library calculates a RAG Index based on multiple evaluation metrics:
 |--------|-------------|
 | Query Adherence | Share of texts where the answer does fit the original query from the user either fully or partially. We further exclude from this count the case where the model refuses to answer (for instance due to irrelevant sources or inability to parsed them). |
 | Grounded Statement | Share of statements associated to a quotation that are actually verified and grounded by the quotation. |
-| Language Quality | | Valid Identifier | Share of quotes that have an identifier matching the one used for the sources being sent. | Source ID validation |
- |
+| Language Quality | Share of answers with a language quality either high or "correct" (just a few occasional mistakes). This applies not just to English but the large variety of European languages tested.| Valid Identifier | Share of quotes that have an identifier matching the one used for the sources being sent. | Source ID validation |
+ 
 | Reasoning Quality | Share of answers with a solid or generally correct reasoning structure and argumentative chaining. |
 
 ## RAG Index
