@@ -2,10 +2,10 @@ import argparse
 from dataclasses import asdict
 import pandas as pd
 import os
-from typing import Dict, Any, Union
+from typing import Dict, Any, Union, Literal
 
 from .running_eval_answer import RAGLLMEvaluator
-from .hallucination import RAGHallucinationEvaluator
+from .hallucination import RAGHallucinationEvaluator, ModelType
 
 class RAGEvaluationPipeline:
     """
@@ -13,16 +13,17 @@ class RAGEvaluationPipeline:
     LLM-based metrics and hallucination detection.
     """
     
-    def __init__(self, model_path: str, max_model_len: int = 8192):
+    def __init__(self, model_path: str, model_type: ModelType = 'other', max_model_len: int = 8192):
         """
         Initialize the evaluation pipeline.
         
         Args:
             model_path: Path to the LLM evaluation model
+            model_type: Type of model being evaluated ('pleias' or 'other')
             max_model_len: Maximum model length for processing
         """
         self.llm_evaluator = RAGLLMEvaluator(model_path, max_model_len)
-        self.hallucination_evaluator = RAGHallucinationEvaluator()
+        self.hallucination_evaluator = RAGHallucinationEvaluator(model_type=model_type)
         
     def evaluate(self, 
                 data: Union[str, pd.DataFrame],
@@ -95,6 +96,8 @@ def main():
     parser.add_argument('--input', required=True, help='Input parquet file path')
     parser.add_argument('--output', help='Output file path for results')
     parser.add_argument('--model-path', required=True, help='Path to LLM evaluation model')
+    parser.add_argument('--model-type', choices=['pleias', 'other'], default='other', 
+                       help='Type of model being evaluated')
     parser.add_argument('--max-model-len', type=int, default=8192, help='Maximum model length')
     parser.add_argument('--response-col', default='generated_response', help='Response column name')
     parser.add_argument('--text-col', default='text', help='Text column name')
@@ -104,6 +107,7 @@ def main():
     # Initialize and run pipeline
     pipeline = RAGEvaluationPipeline(
         model_path=args.model_path,
+        model_type=args.model_type,
         max_model_len=args.max_model_len
     )
     

@@ -8,8 +8,10 @@ import re
 import pandas as pd
 from tqdm import tqdm
 from collections import Counter
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional, Union, Literal
 from dataclasses import dataclass
+
+ModelType = Literal['pleias', 'other']
 
 @dataclass
 class RAGMetrics:
@@ -200,10 +202,12 @@ class MetricsCalculator:
     """Calculator for RAG metrics"""
     def __init__(self, eval_df: pd.DataFrame,
                  response_col: str = 'generated_response',
-                 text_col: str = 'text'):
+                 text_col: str = 'text',
+                 model_type: ModelType = 'other'):
         self.eval_df = eval_df
         self.response_col = response_col
         self.text_col = text_col
+        self.model_type = model_type
         self.aligner = TextAlignment(match=2, mismatch=-1, gap=-1)
         
     def calculate_metrics(self) -> Dict[str, float]:
@@ -280,16 +284,15 @@ class MetricsCalculator:
         return duplicates
     
     def _process_sources(self, eval_df: pd.DataFrame) -> pd.DataFrame:
-        """Process source texts from the DataFrame using R-style processing"""
+        """Process source texts from the DataFrame using specified model type"""
         all_sources = []
         
         # Process each row
         for idx, row in eval_df.iterrows():
             generation_id = str(idx + 1)
-            is_pleias = bool(re.search(r'Pleias', row['model']))
             
             # Extract sources based on model type
-            if is_pleias:
+            if self.model_type == 'pleias':
                 sources = extract_pleias_sources(row[self.text_col])
             else:
                 sources = extract_other_sources(row[self.text_col])
@@ -300,12 +303,11 @@ class MetricsCalculator:
                     'generation_id': generation_id,
                     'source_id': source['source_id'],
                     'source_text': source['source_text'],
-                    'model': row['model']  # Keep model information
                 })
         
         # Convert to DataFrame
         sources_df = pd.DataFrame(all_sources)
-        return sources_df[['generation_id', 'source_text', 'source_id', 'model']]
+        return sources_df[['generation_id', 'source_text', 'source_id']]
     
     def _process_references(self, eval_df: pd.DataFrame, sources: pd.DataFrame) -> pd.DataFrame:
         """Process references from responses"""
@@ -323,8 +325,6 @@ class MetricsCalculator:
                     refs = extract_references(answer, generation_id, sources)
                     if refs:
                         rows_with_refs += 1
-                        for ref in refs:
-                            ref['model'] = row['model']  # Add model information
                         references.extend(refs)
             except Exception as e:
                 print(f"Error processing row {idx}: {str(e)}")
@@ -340,7 +340,8 @@ class MetricsCalculator:
 class RAGHallucinationEvaluator:
     """A single-line evaluator for RAG systems that calculates various metrics."""
     
-    def __init__(self, match: int = 2, mismatch: int = -1, gap: int = -1):
+    def __init__(self, model_type: ModelType = 'other', match: int = 2, mismatch: int = -1, gap: int = -1):
+        self.model_type = model_type
         self.match = match
         self.mismatch = mismatch
         self.gap = gap
@@ -374,7 +375,8 @@ class RAGHallucinationEvaluator:
         calculator = MetricsCalculator(
             eval_df=data,
             response_col=response_col,
-            text_col=text_col
+            text_col=text_col,
+            model_type=self.model_type
         )
         
         metrics_dict = calculator.calculate_metrics()
@@ -412,3 +414,4 @@ def extract_references(text: str, generation_id: str, sources: pd.DataFrame) -> 
             references.append(reference_obj)
             
     return references
+
