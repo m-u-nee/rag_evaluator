@@ -135,6 +135,67 @@ class TextAlignment:
         
         return result_df
 
+def extract_pleias_sources(text: str) -> List[Dict[str, str]]:
+    """Extract sources from Pleias format texts"""
+    # Extract full source blocks
+    pattern = r'<\|source_start\|>.+?<\|source_end\|>'
+    sources = re.findall(pattern, text, re.DOTALL)
+    
+    processed_sources = []
+    for source in sources:
+        # Extract source ID
+        id_pattern = r'<\|source_id_start\|>.+?<\|source_id_end\|>'
+        source_id_match = re.search(id_pattern, source)
+        source_id = ''
+        if source_id_match:
+            source_id = re.sub(r'<\|.+?\|>', '', source_id_match.group())
+            
+        # Clean source text
+        clean_text = source
+        # Remove source ID block first
+        clean_text = re.sub(r'<\|source_id_start\|>.+?<\|source_id_end\|>', '', clean_text)
+        # Remove remaining tags
+        clean_text = re.sub(r'<\|.+?\|>', '', clean_text)
+        
+        processed_sources.append({
+            'source_id': source_id,
+            'source_text': clean_text.strip()
+        })
+        
+    return processed_sources
+
+def extract_other_sources(text: str) -> List[Dict[str, str]]:
+    """Extract sources from non-Pleias format texts"""
+    # Remove header and footer
+    pattern = r'^.+?You can take information from the following texts:\n(.*?)\n\nFinally, your answer should be written'
+    match = re.search(pattern, text, re.DOTALL)
+    if not match:
+        return []
+    
+    content = match.group(1)
+    # Split by '**' markers
+    sources = re.split(r'\n\*\*', content)
+    if not sources:
+        return []
+        
+    processed_sources = []
+    for source in sources:
+        if not source.strip():
+            continue
+            
+        # Extract source ID (everything up to first '**)
+        id_match = re.match(r'^(.+?)\*\*\n', source)
+        if id_match:
+            source_id = id_match.group(1).strip()
+            # Clean source text (everything after '**)
+            source_text = re.sub(r'^.+?\*\*\n', '', source).strip()
+            processed_sources.append({
+                'source_id': source_id,
+                'source_text': source_text
+            })
+            
+    return processed_sources
+
 class MetricsCalculator:
     """Calculator for RAG metrics"""
     def __init__(self, eval_df: pd.DataFrame,
@@ -186,27 +247,65 @@ class MetricsCalculator:
         # Valid quote (3+ words)
         metrics['valid_quote'] = np.mean(aligned_df['citation_size'] >= 3)
         
-        # Unduplicated quote
-        citation_counts = Counter(aligned_df['citation'])
-        metrics['unduplicated_quote'] = np.mean([count == 1 for count in citation_counts.values()])
+        # Calculate duplicated quotes R-style
+        duplicated_quotes = self._calculate_duplicated_quotes_r_style(aligned_df)
+        
+        # Calculate unduplicated quote ratio like in R
+        metrics['unduplicated_quote'] = 1 - (duplicated_quotes / total_citations) if total_citations > 0 else 0
         
         # RAG index
         metrics['rag_index'] = np.mean(list(metrics.values()))
         
         return metrics
     
-    def _process_sources(self, sources_df: pd.DataFrame) -> pd.DataFrame:
-        """Process source texts from the DataFrame"""
-        sources_df['source_text'] = sources_df[self.text_col].apply(extract_sources)
-        sources_df = sources_df.explode('source_text')
-        sources_df['source_id'] = sources_df['source_text'].apply(extract_source_id)
-        sources_df['source_text'] = sources_df['source_text'].apply(clean_source_text)
+    def _calculate_duplicated_quotes_r_style(self, df: pd.DataFrame) -> int:
+        """
+        Calculate duplicated quotes using R-style approach:
+        - Only count duplicates within same generation
+        - Each duplicate pair is counted once
+        """
+        duplicates = 0
+        for generation_id in df['generation_id'].unique():
+            gen_df = df[df['generation_id'] == generation_id]
+            
+            # Compare each citation with others in same generation
+            for idx, row in gen_df.iterrows():
+                matches = gen_df[
+                    (gen_df.index > idx) &  # Only look at subsequent rows to avoid double counting
+                    (gen_df['citation'] == row['citation']) &  # Same citation text
+                    (gen_df['citation_id'] != row['citation_id'])  # Different citation IDs
+                ]
+                duplicates += len(matches)
         
-        # Add simple numeric generation_id
-        sources_df['generation_id'] = range(1, len(sources_df) + 1)
-        sources_df['generation_id'] = sources_df['generation_id'].astype(str)
+        return duplicates
+    
+    def _process_sources(self, eval_df: pd.DataFrame) -> pd.DataFrame:
+        """Process source texts from the DataFrame using R-style processing"""
+        all_sources = []
         
-        return sources_df[['generation_id', 'source_text', 'source_id']]
+        # Process each row
+        for idx, row in eval_df.iterrows():
+            generation_id = str(idx + 1)
+            is_pleias = bool(re.search(r'Pleias', row['model']))
+            
+            # Extract sources based on model type
+            if is_pleias:
+                sources = extract_pleias_sources(row[self.text_col])
+            else:
+                sources = extract_other_sources(row[self.text_col])
+            
+            # Add to results
+            for source in sources:
+                all_sources.append({
+                    'generation_id': generation_id,
+                    'source_id': source['source_id'],
+                    'source_text': source['source_text'],
+                    'model': row['model']  # Keep model information
+                })
+        
+        # Convert to DataFrame
+        sources_df = pd.DataFrame(all_sources)
+        return sources_df[['generation_id', 'source_text', 'source_id', 'model']]
     
     def _process_references(self, eval_df: pd.DataFrame, sources: pd.DataFrame) -> pd.DataFrame:
         """Process references from responses"""
@@ -224,6 +323,8 @@ class MetricsCalculator:
                     refs = extract_references(answer, generation_id, sources)
                     if refs:
                         rows_with_refs += 1
+                        for ref in refs:
+                            ref['model'] = row['model']  # Add model information
                         references.extend(refs)
             except Exception as e:
                 print(f"Error processing row {idx}: {str(e)}")
@@ -311,22 +412,3 @@ def extract_references(text: str, generation_id: str, sources: pd.DataFrame) -> 
             references.append(reference_obj)
             
     return references
-
-def extract_sources(text: str) -> List[str]:
-    """Extract sources from text"""
-    pattern = r'<\|source_start\|>.+?<\|source_end\|>'
-    return re.findall(pattern, text, re.DOTALL)
-
-def extract_source_id(text: str) -> str:
-    """Extract source ID from text"""
-    id_pattern = r'<\|source_id_start\|>.+?<\|source_id_end\|>'
-    source_id = re.search(id_pattern, text)
-    if source_id:
-        return re.sub(r'<\|.+?\|>', '', source_id.group())
-    return ''
-
-def clean_source_text(text: str) -> str:
-    """Clean source text by removing tags"""
-    text = re.sub(r'<\|source_id_start\|>.+?<\|source_id_end\|>', '', text)
-    text = re.sub(r'<\|.+?\|>', '', text)
-    return text
