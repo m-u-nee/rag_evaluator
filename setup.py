@@ -9,6 +9,8 @@ setup(
         "numpy",
         "vllm",
         "tqdm",
+        "nltk",
+        "rank_bm25",
     ],
     author="Your Name",
     author_email="your.email@example.com",
