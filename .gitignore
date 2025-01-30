@@ -1,0 +1,7 @@
+# Python package build artifacts
+*.egg-info/
+*.egg
+__pycache__/
+*.py[cod]
+dist/
+build/

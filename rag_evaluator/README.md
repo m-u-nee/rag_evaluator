@@ -14,27 +14,35 @@ The library calculates a RAG Index based on multiple evaluation metrics:
 
 | Metric | Description | Method |
 |--------|-------------|---------|
-| Non-hallucinated Citation | Measures the literal quote accuracy from source texts | Smith-Waterman algorithm for string alignment |
-| Valid Quote | Verifies quotes contain actual content (≥3 words) | Regex pattern matching |
-| Valid Identifier | Checks source reference accuracy | Source ID validation |
-| Unduplicated Quote | Identifies redundant citations | Duplicate detection |
+| Non-hallucinated Citation | Reprinting ratio of the citation from the claimed source. Low reprinting ratio means the text has not me literally quoted and is likely hallucinated. | Smith-Waterman reprinting ratio => share of continuous strings that are identical in both texts, regardless of punctuation. |
+| Valid Quote | Share of quotes that are actual texts and not identifiers or other non-valid texts. | Regular expression matching at least 3 words. |
+| Valid Identifier | Share of quotes that have an identifier matching the one used for the sources being sent. | Source ID validation |
+| Unduplicated Quote | Share of quotes that are not duplicated multiple times. | Regular expression matching. |
 
-### LLM-as-Judge Metrics (using finetuned llama model, to be made available on Hugging Face)
+### LLM-as-Judge Metrics (using finetuned llama model, available here: https://huggingface.co/PleIAs/rag_eval)
 
 | Metric | Description |
 |--------|-------------|
-| Query Adherence | Evaluates answer relevance to original query |
-| Grounded Statement | Verifies citation support for claims |
-| Language Quality | Assesses linguistic accuracy across multiple languages |
-| Reasoning Quality | Evaluates logical structure and argumentation |
+| Query Adherence | Share of texts where the answer does fit the original query from the user either fully or partially. We further exclude from this count the case where the model refuses to answer (for instance due to irrelevant sources or inability to parsed them). |
+| Grounded Statement | Share of statements associated to a quotation that are actually verified and grounded by the quotation. |
+| Language Quality | Share of answers with a language quality either high or "correct" (just a few occasional mistakes). This applies not just to English but the large variety of European languages tested.| Valid Identifier | Share of quotes that have an identifier matching the one used for the sources being sent. | Source ID validation| Reasoning Quality | Share of answers with a solid or generally correct reasoning structure and argumentative chaining. |
 
 ## RAG Index
 
-The final RAG Index is calculated as the mean of all available evaluation metrics, providing a comprehensive score for RAG system performance.
+The final RAG Index is calculated as the mean of all available evaluation metrics.
 
 ## Format Requirements
 
-TODO
+The library expects the input data to be in a parquet file format, with the following columns:
+
+- `text`: The source context (including tagged sources)
+- `generated_response`: The model's response
+
+There are two formats for the input data. These are the special token format used by the pleias models, and then a more generic (but still structured) format that can be used with any model. 
+
+The special token format is as follows:
+
+<|query_start|> query text <|query_end|> <|source_start|> <|source_id_start|> source id <|source_id_end|> source text <|source_end|> <|analysis_start|> analysis text <|analysis_end|> <|answer_start|> answer text <|answer_end|>
 
 ## Usage
 
@@ -69,7 +77,7 @@ Generated outputs will include:
 - A parquet file containing all generations
 - A readable text file with samples of the generations
 
-The main difference between special_tokens and vllm is the format of the input data. The special tokens format is TODO
+The main difference between special_tokens and vllm is the format of the input data, as well as vllm using a chat format. The resulting dataframe can then be used for evaluation.
 
 ### Evaluation
 
@@ -111,31 +119,4 @@ for key, value in results['hallucination_metrics'].items():
 print("\nOverall RAG Score:", f"{results['overall_rag_score']:.3f}")
 ```
 
-### Output Format
 
-The evaluation produces two types of metrics:
-
-1. Hallucination Metrics:
-   - `non_hallucinated_citation`: Accuracy of quoted content
-   - `valid_quote`: Proportion of substantive quotes (≥3 words)
-   - `valid_identifier`: Accuracy of source references
-   - `unduplicated_quote`: Uniqueness of citations
-   - `rag_index`: Combined hallucination score
-
-2. LLM-based Metrics:
-   - `query_adherence_index`: Relevance to original query
-   - `language_quality_index`: Quality of language and expression
-   - `reasoning_quality_index`: Quality of reasoning and argumentation
-   - `combined_index`: Overall LLM evaluation score
-
-
-### Expected Input Format
-
-Your input text should contain the following tags:
-- Source context: `<|source_start|>` and `<|source_end|>`
-- Source IDs: `<|source_id_start|>` and `<|source_id_end|>`
-- Queries: `<|query_start|>` and `<|query_end|>`
-- Answers: `<|answer_start|>` and `<|answer_end|>`
-- Citations: `<ref name="source_id">quoted text</ref>`
-
-The evaluation will automatically extract and analyze these components to generate the evaluation metrics.
