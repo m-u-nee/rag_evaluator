@@ -5,3 +5,6 @@ __pycache__/
 *.py[cod]
 dist/
 build/
+# Add to .gitignore
+*.egg-info/
+.DS_Store
