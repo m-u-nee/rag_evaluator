@@ -6,6 +6,16 @@ import re
 from nltk.tokenize import word_tokenize
 import nltk
 
+def ensure_nltk_data():
+    """Ensure all required NLTK data is downloaded."""
+    required_packages = ['punkt']
+    for package in required_packages:
+        try:
+            nltk.data.find(f'tokenizers/{package}')
+        except LookupError:
+            print(f"Downloading required NLTK data: {package}")
+            nltk.download(package, quiet=True)
+
 def batch_bm25_search(queries_df: pd.DataFrame,
                      sources_df: pd.DataFrame,
                      query_column: str = 'query',
@@ -26,11 +36,8 @@ def batch_bm25_search(queries_df: pd.DataFrame,
     Returns:
         DataFrame with original queries and concatenated search results
     """
-    # Download NLTK data if needed
-    try:
-        nltk.data.find('tokenizers/punkt')
-    except LookupError:
-        nltk.download('punkt')
+    # Ensure NLTK data is available
+    ensure_nltk_data()
     
     def preprocess_text(text: str) -> str:
         """Preprocess text by lowercasing and removing extra whitespace."""
