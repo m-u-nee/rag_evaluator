@@ -8,3 +8,16 @@ build/
 # Add to .gitignore
 *.egg-info/
 .DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+
+# macOS
+.DS_Store
+
+# IDE settings (optional but recommended)
+.vscode/
+.idea/
