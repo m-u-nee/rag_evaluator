@@ -2,9 +2,9 @@ import pandas as pd
 from typing import Union, Optional, Tuple
 from pathlib import Path
 
-from text_processing.chunker import chunk_dataframe
-from text_processing.search import batch_bm25_search
-from text_processing.format import format_search_results
+from .text_processing.chunker import chunk_dataframe
+from .text_processing.search import batch_bm25_search
+from .text_processing.format import format_search_results
 
 def process_and_search(
     sources: Union[str, pd.DataFrame],
