@@ -1,9 +1,9 @@
 from typing import Optional
 import pandas as pd
 import os
-from generators.base_generator import BaseGenerator
-from generators.vllm_generator import VLLMGenerator
-from generators.special_tokens_generator import SpecialTokensGenerator
+from .generators.base_generator import BaseGenerator
+from .generators.vllm_generator import VLLMGenerator
+from .generators.special_tokens_generator import SpecialTokensGenerator
 
 class RAGGenerator:
     def __init__(
