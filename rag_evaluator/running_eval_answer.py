@@ -221,10 +221,12 @@ def process_evaluation_metrics(df: pd.DataFrame) -> pd.DataFrame:
 
     language_index['language_quality_index'] = language_index['n'] / language_index['n'].sum()
 
-    language_quality_score = float(
-        language_index[language_index['language_evaluation'] == 'Positive']
-        ['language_quality_index']
-    )
+    # Safe extraction of language quality score with fallback
+    try:
+        positive_language = language_index[language_index['language_evaluation'] == 'Positive']
+        language_quality_score = positive_language['language_quality_index'].iloc[0] if not positive_language.empty else 0.0
+    except Exception:
+        language_quality_score = 0.0
 
     # Process reasoning quality index
     reasoning_results = (
@@ -251,10 +253,12 @@ def process_evaluation_metrics(df: pd.DataFrame) -> pd.DataFrame:
 
     reasoning_index['reasoning_quality_index'] = reasoning_index['n'] / reasoning_index['n'].sum()
 
-    reasoning_quality_score = float(
-        reasoning_index[reasoning_index['reasoning_quality'] == 'Positive']
-        ['reasoning_quality_index']
-    )
+    # Safe extraction of reasoning quality score with fallback
+    try:
+        positive_reasoning = reasoning_index[reasoning_index['reasoning_quality'] == 'Positive']
+        reasoning_quality_score = positive_reasoning['reasoning_quality_index'].iloc[0] if not positive_reasoning.empty else 0.0
+    except Exception:
+        reasoning_quality_score = 0.0
 
     # Process query adherence index
     query_results = (
@@ -282,10 +286,12 @@ def process_evaluation_metrics(df: pd.DataFrame) -> pd.DataFrame:
 
     query_index['query_adherence_index'] = query_index['n'] / query_index['n'].sum()
 
-    query_adherence_score = float(
-        query_index[query_index['query_adherence'] == 'Positive']
-        ['query_adherence_index']
-    )
+    # Safe extraction of query adherence score with fallback
+    try:
+        positive_query = query_index[query_index['query_adherence'] == 'Positive']
+        query_adherence_score = positive_query['query_adherence_index'].iloc[0] if not positive_query.empty else 0.0
+    except Exception:
+        query_adherence_score = 0.0
 
     # Combine indices
     indices = pd.DataFrame({
