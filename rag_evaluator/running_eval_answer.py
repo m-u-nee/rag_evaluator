@@ -3,9 +3,11 @@ from vllm import LLM, SamplingParams
 import re
 import pathlib
 import os
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Literal
 from dataclasses import dataclass
 import numpy as np
+
+ModelType = Literal['pleias', 'other']
 
 @dataclass
 class EvaluationResults:
@@ -18,15 +20,17 @@ class EvaluationResults:
     raw_analysis: str
 
 class RAGLLMEvaluator:
-    def __init__(self, model_path: str, max_model_len: int = 8128):
+    def __init__(self, model_path: str, model_type: ModelType = 'other', max_model_len: int = 8128):
         """
         Initialize the RAG evaluator.
         
         Args:
             model_path (str): Path to the evaluation model
+            model_type (ModelType): Type of model format ('pleias' or 'other')
             max_model_len (int): Maximum model length for processing
         """
         self.llm = LLM(model_path, max_model_len=max_model_len)
+        self.model_type = model_type
         self.sampling_params = SamplingParams(
             temperature=0.7,
             top_p=0.95,
@@ -40,11 +44,11 @@ class RAGLLMEvaluator:
         """Remove text between <ref and </ref>"""
         if text is None:
             return ""
-        return re.sub(r'<ref.?</ref>', '', text, flags=re.DOTALL)
+        return re.sub(r'<ref[^>]*>.*?</ref>', '', text, flags=re.DOTALL)
 
     @staticmethod
-    def _extract_content(text: str, start_tag: str, end_tag: str) -> Optional[str]:
-        """Extract content between start and end tags."""
+    def _extract_pleias_content(text: str, start_tag: str, end_tag: str) -> Optional[str]:
+        """Extract content between Pleias-style tags."""
         try:
             pattern = f"{re.escape(start_tag)}(.*?){re.escape(end_tag)}"
             match = re.search(pattern, text, re.DOTALL)
@@ -54,6 +58,32 @@ class RAGLLMEvaluator:
             return content.strip() if content else None
         except Exception:
             return None
+
+    @staticmethod
+    def _extract_other_query(text: str) -> Optional[str]:
+        """Extract query from 'other' format text."""
+        try:
+            # Look for text between the marker and the instruction block
+            pattern = r"You have received this question posted by a user:\n\n(.*?)\n\nYou answer should"
+            match = re.search(pattern, text, re.DOTALL)
+            if match:
+                return match.group(1).strip()
+        except Exception:
+            return None
+        return None
+
+    @staticmethod
+    def _extract_other_answer(text: str) -> Optional[str]:
+        """Extract answer from 'other' format text."""
+        try:
+            # Look for content after "### Referenced answer ###"
+            pattern = r"### Referenced answer ###\s*\n(.*?)(?:$|###)"
+            match = re.search(pattern, text, re.DOTALL)
+            if match:
+                return match.group(1).strip()
+        except Exception:
+            return None
+        return None
 
     @staticmethod
     def _extract_components(text: str) -> Dict[str, str]:
@@ -142,11 +172,19 @@ class RAGLLMEvaluator:
         # Handle data preparation
         df["text"] = df["text"].fillna("").astype(str)
         df["generated_response"] = df["generated_response"].fillna("").astype(str)
-        concatenated_text = df["text"] + df["generated_response"]
 
-        for text in concatenated_text.tolist():
-            query = self._extract_content(text, "<|query_start|>", "<|query_end|>")
-            answer = self._extract_content(text, "<|answer_start|>", "<|answer_end|>")
+        for idx, row in df.iterrows():
+            query = None
+            answer = None
+            
+            if self.model_type == 'pleias':
+                # Use Pleias format extraction
+                query = self._extract_pleias_content(row["text"], "<|query_start|>", "<|query_end|>")
+                answer = self._extract_pleias_content(row["generated_response"], "<|answer_start|>", "<|answer_end|>")
+            else:
+                # Use other format extraction
+                query = self._extract_other_query(row["text"])
+                answer = self._extract_other_answer(row["generated_response"])
 
             if query is not None and answer is not None:
                 queries.append(query)

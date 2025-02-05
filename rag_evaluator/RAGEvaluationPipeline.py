@@ -22,7 +22,11 @@ class RAGEvaluationPipeline:
             model_type: Type of model being evaluated ('pleias' or 'other')
             max_model_len: Maximum model length for processing
         """
-        self.llm_evaluator = RAGLLMEvaluator(model_path, max_model_len)
+        self.llm_evaluator = RAGLLMEvaluator(
+            model_path=model_path, 
+            model_type=model_type,  # Now passing model_type to LLM evaluator
+            max_model_len=max_model_len
+        )
         self.hallucination_evaluator = RAGHallucinationEvaluator(model_type=model_type)
         
     def evaluate(self, 
