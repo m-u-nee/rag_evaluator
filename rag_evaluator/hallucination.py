@@ -175,14 +175,21 @@ def extract_other_sources(text: str) -> List[Dict[str, str]]:
     content_pattern = r'^.+?You can take information from the following texts:\n(.+?)\n\nFinally, your answer'
     match = re.search(content_pattern, text, re.DOTALL)
     if not match:
+        print("Warning: Could not find source text block between markers")
+        print("Text preview:", text[:200] + "..." if len(text) > 200 else text)
         return []
     
     content = match.group(1)
     # Split sources but don't filter yet
     sources = content.split('\n**')[1:]  # Skip first empty split
     
+    if not sources:
+        print("Warning: No sources found after splitting on '**'")
+        print("Content preview:", content[:200] + "..." if len(content) > 200 else content)
+        return []
+    
     processed_sources = []
-    for source in sources:
+    for i, source in enumerate(sources, 1):
         try:
             # Extract source ID without **
             source_id = source[:source.find('**')].strip()
@@ -194,10 +201,20 @@ def extract_other_sources(text: str) -> List[Dict[str, str]]:
                     'source_id': source_id,
                     'source_text': source_text
                 })
+            else:
+                print(f"Warning: Empty source_id or source_text in source {i}")
+                print(f"Source block: {source[:200]}...")
+                
         except Exception as e:
-            print(f"Error processing source: {str(e)}")
+            print(f"Error processing source {i}: {str(e)}")
+            print(f"Source block: {source[:200]}...")
             continue
-            
+    
+    if not processed_sources:
+        print("Warning: No sources were successfully processed")
+    else:
+        print(f"Successfully processed {len(processed_sources)} sources")
+        
     return processed_sources
 
 def extract_references(text: str, generation_id: str, sources: pd.DataFrame) -> List[Dict]:
@@ -374,9 +391,22 @@ class MetricsCalculator:
                     'source_text': source['source_text'],
                 })
         
-        # Convert to DataFrame
+        # Convert to DataFrame and handle empty case
+        if not all_sources:
+            print("Warning: No sources were extracted from any rows")
+            return pd.DataFrame(columns=['generation_id', 'source_text', 'source_id'])
+            
         sources_df = pd.DataFrame(all_sources)
-        return sources_df[['generation_id', 'source_text', 'source_id']]
+        
+        # Ensure all required columns exist
+        required_cols = ['generation_id', 'source_text', 'source_id']
+        if not all(col in sources_df.columns for col in required_cols):
+            print("Warning: Missing required columns in sources DataFrame")
+            print(f"Expected columns: {required_cols}")
+            print(f"Found columns: {sources_df.columns.tolist()}")
+            return pd.DataFrame(columns=required_cols)
+        
+        return sources_df[required_cols]
     
     def _process_references(self, eval_df: pd.DataFrame, sources: pd.DataFrame) -> pd.DataFrame:
         """Process references from responses"""
@@ -471,16 +501,16 @@ def extract_content(text: str, start_tag: str, end_tag: str) -> Optional[str]:
     return None
 
 
-# # Initialize evaluator with 'other' model type
-# evaluator = RAGHallucinationEvaluator(model_type='pleias')
+# Initialize evaluator with 'other' model type
+evaluator = RAGHallucinationEvaluator(model_type='other')
 
-# # Run evaluation
-# metrics = evaluator.evaluate(
-#     data="/Users/mattia/Downloads/generations_pleias.parquet",
-#     response_col='generated_response',
-#     text_col='text'
-# )
+# Run evaluation
+metrics = evaluator.evaluate(
+    data="/Users/mattia/Downloads/generations.parquet",
+    response_col='generated_response',
+    text_col='text'
+)
 
-# # Print results
-# print("\nFinal RAG Metrics:")
-# print(metrics)
+# Print results
+print("\nFinal RAG Metrics:")
+print(metrics)
