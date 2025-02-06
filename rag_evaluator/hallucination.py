@@ -1,3 +1,7 @@
+
+
+
+
 """
 RAG Evaluator Library for assessing RAG system performance metrics.
 Provides automated evaluation of retrieval-augmented generation systems.
@@ -168,35 +172,100 @@ def extract_pleias_sources(text: str) -> List[Dict[str, str]]:
 
 def extract_other_sources(text: str) -> List[Dict[str, str]]:
     """Extract sources from non-Pleias format texts"""
-    # Remove header and footer
-    pattern = r'^.+?You can take information from the following texts:\n(.*?)\n\nFinally, your answer should be written'
-    match = re.search(pattern, text, re.DOTALL)
+    content_pattern = r'^.+?You can take information from the following texts:\n(.+?)\n\nFinally, your answer'
+    match = re.search(content_pattern, text, re.DOTALL)
     if not match:
         return []
     
     content = match.group(1)
-    # Split by '**' markers
-    sources = re.split(r'\n\*\*', content)
-    if not sources:
-        return []
-        
+    # Split sources but don't filter yet
+    sources = content.split('\n**')[1:]  # Skip first empty split
+    
     processed_sources = []
     for source in sources:
-        if not source.strip():
+        try:
+            # Extract source ID without **
+            source_id = source[:source.find('**')].strip()
+            # Get everything after **
+            source_text = source[source.find('**')+2:].strip()
+            
+            if source_id and source_text:
+                processed_sources.append({
+                    'source_id': source_id,
+                    'source_text': source_text
+                })
+        except Exception as e:
+            print(f"Error processing source: {str(e)}")
             continue
             
-        # Extract source ID (everything up to first '**)
-        id_match = re.match(r'^(.+?)\*\*\n', source)
-        if id_match:
-            source_id = id_match.group(1).strip()
-            # Clean source text (everything after '**)
-            source_text = re.sub(r'^.+?\*\*\n', '', source).strip()
-            processed_sources.append({
-                'source_id': source_id,
-                'source_text': source_text
-            })
-            
     return processed_sources
+
+def extract_references(text: str, generation_id: str, sources: pd.DataFrame) -> List[Dict]:
+    """Extract references from both XML tags and numbered formats"""
+    references = []
+    
+    # Handle XML ref tags first
+    ref_pattern = r'<ref\s+name=["\'](.*?)[\'"]\s*>(.*?)</ref>'
+    xml_matches = list(re.finditer(ref_pattern, text, re.DOTALL))
+    
+    if not xml_matches:
+        # Improved numbered citation pattern
+        numbered_pattern = r'\d+\.\s+\*\*([^*]+?)\*\*\s*(.*?)(?=\d+\.\s+\*\*|$)'
+        numbered_matches = re.finditer(numbered_pattern, text, re.DOTALL)
+        
+        for match in numbered_matches:
+            try:
+                ref_id = match.group(1).strip()
+                # Extract actual citation from the text block
+                full_text = match.group(2).strip()
+                
+                # Remove metadata lines and extract citation
+                lines = full_text.split('\n')
+                citation_text = '\n'.join(line for line in lines if line.strip() and not line.strip().startswith('(') and not line.strip().startswith('Objet:'))
+                
+                if not citation_text:
+                    continue
+                    
+                source_mask = (sources["generation_id"] == generation_id) & (sources["source_id"] == ref_id)
+                
+                reference_obj = {
+                    'generation_id': generation_id,
+                    'reference_id': ref_id,
+                    'citation': citation_text.strip(),
+                    'citation_size': len(citation_text.strip().split()),
+                    'original_source': sources[source_mask]["source_text"].iloc[0] if not sources[source_mask].empty else ""
+                }
+                references.append(reference_obj)
+                
+            except Exception as e:
+                print(f"Error processing numbered reference in generation {generation_id}: {str(e)}")
+                continue
+    else:
+        # Process XML refs
+        for match in xml_matches:
+            try:
+                ref_id = match.group(1).strip()
+                citation = match.group(2).strip()
+                
+                if not citation:
+                    continue
+                    
+                source_mask = (sources["generation_id"] == generation_id) & (sources["source_id"] == ref_id)
+                
+                reference_obj = {
+                    'generation_id': generation_id,
+                    'reference_id': ref_id,
+                    'citation': citation,
+                    'citation_size': len(citation.split()),
+                    'original_source': sources[source_mask]["source_text"].iloc[0] if not sources[source_mask].empty else ""
+                }
+                references.append(reference_obj)
+                
+            except Exception as e:
+                print(f"Error processing XML reference in generation {generation_id}: {str(e)}")
+                continue
+    
+    return references
 
 class MetricsCalculator:
     """Calculator for RAG metrics"""
@@ -319,13 +388,19 @@ class MetricsCalculator:
         for idx, row in eval_df.iterrows():
             try:
                 text = row[self.response_col]
-                generation_id = str(idx + 1)  # Simple numeric generation_id
-                answer = extract_content(text, r'<\|answer_start\|>', r'<\|answer_end\|>')
-                if answer:
-                    refs = extract_references(answer, generation_id, sources)
-                    if refs:
-                        rows_with_refs += 1
-                        references.extend(refs)
+                generation_id = str(idx + 1)
+                
+                # For Pleias models, extract content between answer tags
+                if self.model_type == 'pleias':
+                    text = extract_content(text, r'<\|answer_start\|>', r'<\|answer_end\|>')
+                    if not text:
+                        continue
+                
+                refs = extract_references(text, generation_id, sources)
+                if refs:
+                    rows_with_refs += 1
+                    references.extend(refs)
+                
             except Exception as e:
                 print(f"Error processing row {idx}: {str(e)}")
                 continue
@@ -382,36 +457,30 @@ class RAGHallucinationEvaluator:
         metrics_dict = calculator.calculate_metrics()
         return RAGMetrics(**metrics_dict)
 
+
+
+
 def extract_content(text: str, start_tag: str, end_tag: str) -> Optional[str]:
-    """Extract content between tags"""
+    """Extract content between tags with more robust pattern matching"""
+    # Make pattern more flexible
     pattern = f"{start_tag}(.*?)(?:{end_tag}|$)"
-    match = re.search(pattern, text, re.DOTALL)
+    match = re.search(pattern, text, re.DOTALL | re.IGNORECASE)
     if match:
         content = match.group(1).strip()
         return content if content else None
     return None
 
-def extract_references(text: str, generation_id: str, sources: pd.DataFrame) -> List[Dict]:
-    """Extract references from text"""
-    references = []
-    ref_pattern = r'<ref\s+name="([^"]+)">([^<]+)<\/ref>'
-    
-    for match in re.finditer(ref_pattern, text):
-        ref_id = match.group(1)
-        citation = match.group(2)
-        
-        source_mask = (sources["generation_id"] == generation_id) & (sources["source_id"] == ref_id)
-        if not sources[source_mask].empty:
-            original_source = sources[source_mask]["source_text"].iloc[0]
-            
-            reference_obj = {
-                'generation_id': generation_id,
-                'reference_id': ref_id,
-                'citation': citation,
-                'citation_size': len(citation.split()),
-                'original_source': original_source,
-            }
-            references.append(reference_obj)
-            
-    return references
 
+# # Initialize evaluator with 'other' model type
+# evaluator = RAGHallucinationEvaluator(model_type='pleias')
+
+# # Run evaluation
+# metrics = evaluator.evaluate(
+#     data="/Users/mattia/Downloads/generations_pleias.parquet",
+#     response_col='generated_response',
+#     text_col='text'
+# )
+
+# # Print results
+# print("\nFinal RAG Metrics:")
+# print(metrics)
