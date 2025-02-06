@@ -10,7 +10,8 @@ setup(
         "vllm",
         "tqdm",
         "nltk",
-        "rank_bm25",
+        "rank_bm25",re
+        
     ],
     author="Your Name",
     author_email="your.email@example.com",
