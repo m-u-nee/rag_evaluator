@@ -502,15 +502,15 @@ def extract_content(text: str, start_tag: str, end_tag: str) -> Optional[str]:
 
 
 # Initialize evaluator with 'other' model type
-evaluator = RAGHallucinationEvaluator(model_type='other')
+# evaluator = RAGHallucinationEvaluator(model_type='other')
 
-# Run evaluation
-metrics = evaluator.evaluate(
-    data="/Users/mattia/Downloads/generations.parquet",
-    response_col='generated_response',
-    text_col='text'
-)
+# # Run evaluation
+# metrics = evaluator.evaluate(
+#     data="/Users/mattia/Downloads/generations.parquet",
+#     response_col='generated_response',
+#     text_col='text'
+# )
 
-# Print results
-print("\nFinal RAG Metrics:")
-print(metrics)
+# # Print results
+# print("\nFinal RAG Metrics:")
+# print(metrics)
