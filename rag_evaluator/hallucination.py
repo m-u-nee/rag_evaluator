@@ -352,23 +352,23 @@ class MetricsCalculator:
         """
         Calculate duplicated quotes using R-style approach:
         - Only count duplicates within same generation
-        - Each duplicate pair is counted once
+        - Each duplicate is counted only once per generation
         """
-        duplicates = 0
+        total_duplicates = 0
+        
         for generation_id in df['generation_id'].unique():
             gen_df = df[df['generation_id'] == generation_id]
             
-            # Compare each citation with others in same generation
-            for idx, row in gen_df.iterrows():
-                matches = gen_df[
-                    (gen_df.index > idx) &  # Only look at subsequent rows to avoid double counting
-                    (gen_df['citation'] == row['citation']) &  # Same citation text
-                    (gen_df['citation_id'] != row['citation_id'])  # Different citation IDs
-                ]
-                duplicates += len(matches)
+            # Find all duplicated citations in this generation
+            citation_counts = gen_df['citation'].value_counts()
+            duplicated_citations = citation_counts[citation_counts > 1]
+            
+            # For each duplicated citation, count number of duplicates
+            # A citation that appears n times has (n-1) duplicates
+            total_duplicates += sum(count - 1 for count in duplicated_citations)
         
-        return duplicates
-    
+        return total_duplicates
+        
     def _process_sources(self, eval_df: pd.DataFrame) -> pd.DataFrame:
         """Process source texts from the DataFrame using specified model type"""
         all_sources = []
