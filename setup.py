@@ -10,7 +10,7 @@ setup(
         "vllm",
         "tqdm",
         "nltk",
-        "rank_bm25",re
+        "rank_bm25",
         
     ],
     author="Your Name",
