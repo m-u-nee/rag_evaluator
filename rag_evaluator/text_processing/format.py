@@ -10,15 +10,17 @@ def generate_random_id(length: int = 8) -> str:
 def format_search_results(df: pd.DataFrame, 
                          query_column: str = 'query',
                          sources_column: str = 'concatenated_sources',
-                         source_separator: str = '\n### Source ###\n') -> Tuple[pd.DataFrame, pd.DataFrame]:
+                         source_separator: str = '\n### Source ###\n',
+                         random_ids: bool = True) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
-    Format search results with special tags and random source IDs in two different formats.
+    Format search results with special tags and configurable source IDs in two different formats.
     
     Args:
         df: DataFrame containing queries and concatenated sources
         query_column: Name of the column containing queries
         sources_column: Name of the column containing concatenated sources
         source_separator: Separator used between sources in the sources column
+        random_ids: If True, generate random IDs; if False, use sequential numbers
         
     Returns:
         Tuple of (special_tokens_df, standard_df)
@@ -29,8 +31,8 @@ def format_search_results(df: pd.DataFrame,
         
         formatted_text = f"<|query_start|>{query}<|query_end|>"
         
-        for source in source_texts:
-            source_id = generate_random_id()
+        for idx, source in enumerate(source_texts, 1):
+            source_id = generate_random_id() if random_ids else str(idx)
             formatted_text += f"<|source_start|><|source_id_start|>{source_id}<|source_id_end|>{source}<|source_end|>"
         
         formatted_text += "<|source_analysis_start|>"
@@ -50,8 +52,8 @@ def format_search_results(df: pd.DataFrame,
         prompt += """You should use multiple references from different texts to increase the overall verifiability. You can take information from the following texts:"""
         
         # Add sources with IDs
-        for source_text in source_texts:
-            source_id = generate_random_id()
+        for idx, source_text in enumerate(source_texts, 1):
+            source_id = generate_random_id() if random_ids else str(idx)
             prompt += f"\n**{source_id}**\n{source_text}"
         
         prompt += """ Finally, your answer should be written approximately in the style of this other text: """

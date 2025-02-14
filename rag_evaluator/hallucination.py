@@ -171,52 +171,50 @@ def extract_pleias_sources(text: str) -> List[Dict[str, str]]:
     return processed_sources
 
 def extract_other_sources(text: str) -> List[Dict[str, str]]:
-    """Extract sources from non-Pleias format texts"""
-    content_pattern = r'^.+?You can take information from the following texts:\n(.+?)\n\nFinally, your answer'
+    """
+    Extract sources from text with improved pattern matching and error handling.
+    
+    Args:
+        text (str): Input text containing sources marked with ** **
+        
+    Returns:
+        List[Dict[str, str]]: List of dictionaries containing source_id and source_text
+    """
+    # More flexible pattern that allows for variations in formatting
+    content_pattern = r'(?:You can take information from the following texts:)?\s*\n((?:\*\*.*?\*\*[\s\S]*?(?=\*\*|Finally|$))+)'
+    
+    # Find the content block
     match = re.search(content_pattern, text, re.DOTALL)
     if not match:
-        print("Warning: Could not find source text block between markers")
-        print("Text preview:", text[:200] + "..." if len(text) > 200 else text)
+        print("Warning: Could not find source text block")
         return []
     
     content = match.group(1)
-    # Split sources but don't filter yet
-    sources = content.split('\n**')[1:]  # Skip first empty split
     
-    if not sources:
-        print("Warning: No sources found after splitting on '**'")
-        print("Content preview:", content[:200] + "..." if len(content) > 200 else content)
-        return []
+    # Extract individual sources with improved pattern
+    source_pattern = r'\*\*(.*?)\*\*([\s\S]*?)(?=\*\*|$)'
+    sources = re.findall(source_pattern, content)
     
     processed_sources = []
-    for i, source in enumerate(sources, 1):
+    for i, (source_id, source_text) in enumerate(sources, 1):
         try:
-            # Extract source ID without **
-            source_id = source[:source.find('**')].strip()
-            # Get everything after **
-            source_text = source[source.find('**')+2:].strip()
+            source_id = source_id.strip()
+            source_text = source_text.strip()
             
             if source_id and source_text:
                 processed_sources.append({
                     'source_id': source_id,
-                    'source_text': source_text
+                    'source_text': source_text,
+                    'index': i
                 })
             else:
                 print(f"Warning: Empty source_id or source_text in source {i}")
-                print(f"Source block: {source[:200]}...")
                 
         except Exception as e:
             print(f"Error processing source {i}: {str(e)}")
-            print(f"Source block: {source[:200]}...")
             continue
     
-    if not processed_sources:
-        print("Warning: No sources were successfully processed")
-    else:
-        print(f"Successfully processed {len(processed_sources)} sources")
-        
     return processed_sources
-
 def extract_references(text: str, generation_id: str, sources: pd.DataFrame) -> List[Dict]:
     """Extract references from both XML tags and numbered formats"""
     references = []
@@ -514,3 +512,6 @@ def extract_content(text: str, start_tag: str, end_tag: str) -> Optional[str]:
 # # Print results
 # print("\nFinal RAG Metrics:")
 # print(metrics)
+
+
+
