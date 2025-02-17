@@ -66,42 +66,59 @@ class RAGLLMEvaluator:
             return None
     
     @staticmethod
-    def _extract_other_query(text: str) -> Optional[str]:
-        """Extract query from 'other' format text."""
+    def extract_other_query(text: str) -> str:
+        """
+        Extract query from text that contains a French query in quotes.
+        """
         print("\nAttempting to extract query from 'other' format")
         print(f"Input text (first 100 chars): {text[:100]}...")
+        
         try:
-            pattern = r"question posted by a user:\s*(.*?)\s*You answer should"
+            # Updated pattern to find the query after "posted by a user:", handling both "You/Your answer should"
+            pattern = r'posted by a user:\s*(.*?)\s*(?:You|Your) answer should'
             match = re.search(pattern, text, re.DOTALL)
+            
             if match:
                 result = match.group(1).strip()
-                print(f"Extracted query: {result[:100]}...")
+                print(f"Successfully extracted query: {result}")
                 return result
+                
             print("WARNING: No query match found")
+            return None
+            
         except Exception as e:
-            print(f"ERROR in _extract_other_query: {str(e)}")
-        return None
-
+            print(f"ERROR in extract_other_query: {str(e)}")
+            return None
     @staticmethod
-    def _extract_other_answer(text: str) -> Optional[str]:
-        """Extract answer from 'other' format text."""
+    def extract_other_answer(text: str) -> str:
+        """
+        Extract answer from the 'other' format text, specifically handling the format:
+        ### Language of the query ###
+        ...
+        ### Pre-analysis ###
+        ...
+        ### Referenced answer ###
+        [answer content]
+        """
         print("\nAttempting to extract answer from 'other' format")
         print(f"Input text (first 100 chars): {text[:100]}...")
+        
         try:
-            pattern = r"### Referenced answer ###\s*\n(.*?)(?:\n###|$)"
-            matches = list(re.finditer(pattern, text, re.DOTALL))
+            # Updated pattern to match everything between "### Referenced answer ###" and the end of the text
+            pattern = r"### Referenced answer ###\s*(.*?)(?:\Z|### Language of the query ###)"
+            match = re.search(pattern, text, re.DOTALL)
             
-            print(f"Found {len(matches)} potential answer matches")
-            if matches and len(matches) > 1:
-                result = matches[-1].group(1).strip()
-                print(f"Using last match. Extracted answer (first 100 chars): {result[:100]}...")
+            if match:
+                result = match.group(1).strip()
+                print(f"Successfully extracted answer (first 100 chars): {result[:100]}...")
                 return result
-            print("WARNING: No valid answer match found")
+                
+            print("WARNING: No answer match found")
             return None
+            
         except Exception as e:
-            print(f"ERROR in _extract_other_answer: {str(e)}")
+            print(f"ERROR in extract_other_answer: {str(e)}")
             return None
-
     @staticmethod
     def _extract_components(text: str) -> Dict[str, str]:
         """Extract evaluation components from generated text."""
