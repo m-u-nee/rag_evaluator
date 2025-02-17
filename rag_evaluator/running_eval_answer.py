@@ -274,7 +274,8 @@ class RAGLLMEvaluator:
         print(f"\nEvaluating from DataFrame with {len(df)} rows")
         results_df = self._process_data(df)
         return process_evaluation_metrics(results_df)
-        def process_evaluation_metrics(df: pd.DataFrame) -> pd.DataFrame:
+
+def process_evaluation_metrics(df: pd.DataFrame) -> pd.DataFrame:
     """Process evaluation metrics and convert them to numerical scores."""
     print(f"\nProcessing evaluation metrics for DataFrame with {len(df)} rows")
     
