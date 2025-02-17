@@ -58,32 +58,35 @@ class RAGLLMEvaluator:
             return content.strip() if content else None
         except Exception:
             return None
-
+    
     @staticmethod
     def _extract_other_query(text: str) -> Optional[str]:
         """Extract query from 'other' format text."""
         try:
-            # Look for text between the marker and the instruction block
-            pattern = r"You have received this question posted by a user:\n\n(.*?)\n\nYou answer should"
+            # Updated pattern to match the actual format
+            pattern = r"question posted by a user:\s*(.*?)\s*You answer should"
             match = re.search(pattern, text, re.DOTALL)
             if match:
                 return match.group(1).strip()
         except Exception:
             return None
         return None
+
 
     @staticmethod
     def _extract_other_answer(text: str) -> Optional[str]:
         """Extract answer from 'other' format text."""
         try:
-            # Look for content after "### Referenced answer ###"
-            pattern = r"### Referenced answer ###\s*\n(.*?)(?:$|###)"
-            match = re.search(pattern, text, re.DOTALL)
-            if match:
-                return match.group(1).strip()
+            # Find all occurrences of the answer section
+            pattern = r"### Referenced answer ###\s*\n(.*?)(?:\n###|$)"
+            matches = list(re.finditer(pattern, text, re.DOTALL))
+            
+            # Get the last match (the actual answer, not the example)
+            if matches and len(matches) > 1:
+                return matches[-1].group(1).strip()
+            return None
         except Exception:
             return None
-        return None
 
     @staticmethod
     def _extract_components(text: str) -> Dict[str, str]:
