@@ -66,7 +66,7 @@ class RAGLLMEvaluator:
             return None
     
     @staticmethod
-    def extract_other_query(text: str) -> str:
+    def _extract_other_query(text: str) -> str:
         """
         Extract query from text that contains a French query in quotes.
         """
@@ -89,8 +89,9 @@ class RAGLLMEvaluator:
         except Exception as e:
             print(f"ERROR in extract_other_query: {str(e)}")
             return None
+
     @staticmethod
-    def extract_other_answer(text: str) -> str:
+    def _extract_other_answer(text: str) -> str:
         """
         Extract answer from the 'other' format text, specifically handling the format:
         ### Language of the query ###
