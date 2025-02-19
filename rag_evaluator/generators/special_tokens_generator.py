@@ -11,7 +11,7 @@ class SpecialTokensGenerator(BaseGenerator):
        return SamplingParams(
            temperature=0.0,
            top_p=0.95,
-           max_tokens=2500,
+           max_tokens=1200,
            repetition_penalty=1,
            stop=["#END#"],
            skip_special_tokens=False,
